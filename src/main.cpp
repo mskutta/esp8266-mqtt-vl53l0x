@@ -48,7 +48,7 @@
 #include <VL53L0X.h>
 
 // Median for Sensor
-#include <RunningMedian.h>
+//#include <RunningMedian.h>
 
 // MQTT
 #include <PubSubClient.h>
@@ -64,7 +64,7 @@ int minRange = 0;
 
 unsigned int count = 0;
 unsigned long nextRun = 0;
-unsigned long displayTimeout = 0;
+unsigned long currentMillis = 0;
 
 /* Display */
 SSD1306AsciiWire oled;
@@ -79,7 +79,7 @@ const char* broker = "10.81.95.165";
 
 /* VL53L0X */
 VL53L0X sensor;
-RunningMedian samples = RunningMedian(9);
+//RunningMedian samples = RunningMedian(9);
 
 void configModeCallback (WiFiManager *myWiFiManager) {
   oled.println(F("Config Mode"));
@@ -89,11 +89,11 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 
 void reconnect() {
   while (!client.connected()) {
-    Serial.println("MQTT Connecting...");
+    Serial.println(F("MQTT Connecting..."));
     if (client.connect(hostname)) {
-      Serial.println("MQTT connected");
+      Serial.println(F("MQTT connected"));
     } else {
-      Serial.print(".");
+      Serial.print(F("."));
       delay(1000);
     }
   }
@@ -121,7 +121,7 @@ void setup()
   WiFiManager wifiManager;
   wifiManager.setAPCallback(configModeCallback);
   if(!wifiManager.autoConnect(hostname)) {
-    oled.println("WiFi Connect Failed");
+    oled.println(F("WiFi Connect Failed"));
     //reset and try again, or maybe put it to deep sleep
     ESP.reset();
     delay(1000);
@@ -207,10 +207,11 @@ void loop()
   }
   client.loop();
   
-  if (millis() < nextRun) {
+  currentMillis = millis();
+  if (currentMillis < nextRun) {
     return;
   }
-  nextRun = millis() + RUN_INTERVAL;
+  nextRun = currentMillis + RUN_INTERVAL;
 
   int range = sensor.readRangeContinuousMillimeters();
   if (!sensor.timeoutOccurred()) { 
@@ -220,7 +221,8 @@ void loop()
 
     // Detect if tripped
     if ((range < (maxRange - 100)) && !tripped) {
-      client.publish(ESP_NAME, "1");
+      sprintf(topic, "%s", ESP_NAME);
+      client.publish(topic, "1");
       digitalWrite(LED_BUILTIN, LOW);
       tripped = true;
       oled.ssd1306WriteCmd(SSD1306_DISPLAYON);
@@ -228,7 +230,8 @@ void loop()
       count++;
     } 
     else if (range > (minRange + 100) && tripped) {
-      client.publish(ESP_NAME, "0");
+      sprintf(topic, "%s", ESP_NAME);
+      client.publish(topic, "0");
       digitalWrite(LED_BUILTIN, HIGH);
       tripped = false;
       oled.ssd1306WriteCmd(SSD1306_DISPLAYOFF);
@@ -246,6 +249,5 @@ void loop()
     }
 
     oled.printf("%4d %4d %4d %6d\r", minRange, range, maxRange, count);
-    //oled.invertDisplay(tripped);
   }
 }
